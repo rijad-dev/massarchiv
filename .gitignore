@@ -1,0 +1,18 @@
+# Secrets — NIEMALS committen
+.env
+.env.*
+!.env.example
+
+# Private Nutzerdaten (Koerperdaten-Profil, Uploads)
+wardrobe.db
+uploads/
+
+# Dependencies & Builds
+node_modules/
+dist/
+
+# Sonstiges
+*.log
+.DS_Store
+Thumbs.db
+.claude/settings.local.json
