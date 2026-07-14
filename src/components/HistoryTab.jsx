@@ -80,7 +80,7 @@ export default function HistoryTab({ history, onDelete, onClearAll, onTransfer, 
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Verlauf durchsuchen (Marke, Modell, Notizen …)"
-          className={`sm-input ${query ? 'pl-3' : 'pl-9'} pr-9`}
+          className={`sm-input sm-input-search ${query ? 'is-filled' : ''}`}
         />
         {query && (
           <button onClick={() => setQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 sm-icon-btn p-1 hover:bg-black/5 rounded" type="button">

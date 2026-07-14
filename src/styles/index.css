@@ -77,6 +77,13 @@ body {
 }
 .sm-input::placeholder { color: rgba(34,31,26,0.35); }
 
+/* Suchfeld: Lupe links, Loeschen-Button rechts. Die Abstaende muessen hier
+   stehen — .sm-input kommt nach @tailwind utilities und wuerde die
+   Tailwind-Padding-Klassen sonst ueberschreiben. is-filled: bei Eingabe
+   faellt die Lupe weg, der Text rueckt nach links. */
+.sm-input-search { padding-left: 34px; padding-right: 34px; }
+.sm-input-search.is-filled { padding-left: 10px; }
+
 .sm-btn-primary {
   background: var(--ink);
   color: var(--paper);
