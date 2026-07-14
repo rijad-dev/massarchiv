@@ -15,6 +15,10 @@ export async function getDb() {
     driver: sqlite3.Database
   });
 
+  // WAL-Journaling: schützt die einzige Datenkopie vor Korruption, falls der
+  // Prozess mitten in einem Schreibvorgang beendet wird.
+  await db.exec('PRAGMA journal_mode=WAL;');
+
   // Create tables for wardrobe garments and analysis history
   await db.exec(`
     CREATE TABLE IF NOT EXISTS wardrobe (
@@ -104,10 +108,17 @@ export async function saveProfile(profile) {
 // Kappt den Verlauf auf die neuesten `limit` Einträge (analog zum Frontend-Limit).
 export async function pruneHistory(limit = 50) {
   const database = await getDb();
-  const rows = await database.all('SELECT id FROM history ORDER BY date DESC');
-  const excess = rows.slice(limit);
-  for (const row of excess) {
-    await database.run('DELETE FROM history WHERE id = ?', row.id);
-  }
-  return excess.map(r => r.id);
+  const result = await database.run(
+    'DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY date DESC LIMIT ?)',
+    limit
+  );
+  return { deleted: result.changes || 0 };
+}
+
+// Schließt die Verbindung (für sauberes Herunterfahren in server.js).
+export async function closeDb() {
+  if (!db) return;
+  const database = db;
+  db = null;
+  await database.close();
 }

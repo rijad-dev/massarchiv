@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, User, Plus, Trash2, Sparkles, Loader2, AlertCircle, Check } from 'lucide-react';
+import { X, User, Plus, Trash2, Sparkles, Loader2, AlertCircle, Check, Lightbulb } from 'lucide-react';
+import Modal from './Modal';
 import { uid, chartToPlain } from '../utils/helpers';
 import { callLLM } from '../utils/llm';
 
@@ -199,15 +200,7 @@ export default function ProfileModal({ profile, onSave, onCancel, wardrobe, sett
   };
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center p-4 z-50 animate-fade-in"
-      style={{ background: 'rgba(34,31,26,0.4)' }}
-      onClick={onCancel}
-    >
-      <div
-        className="sm-bg-paper max-w-lg w-full rounded-sm shadow-xl sm-border-graph border overflow-hidden animate-scale-up"
-        onClick={e => e.stopPropagation()}
-      >
+    <Modal onClose={onCancel} label="Mein Steckbrief" maxWidthClass="max-w-lg" className="overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b sm-border-graph bg-black/[0.02]">
           <h3 className="sm-font-label uppercase tracking-wide text-sm sm-text-ink flex items-center gap-2 font-semibold">
             <User size={16} className="sm-text-tape" /> Mein Steckbrief
@@ -248,7 +241,7 @@ export default function ProfileModal({ profile, onSave, onCancel, wardrobe, sett
             )}
             {profileInferenceProposal && (
               <div className="border border-[#C9971F]/50 bg-[#C9971F]/5 rounded-sm p-3 space-y-2.5 animate-scale-up">
-                <div className="sm-font-label uppercase tracking-wide text-xs font-semibold text-yellow-900 flex items-center gap-1.5">
+                <div className="sm-font-label uppercase tracking-wide text-xs font-semibold sm-text-warn flex items-center gap-1.5">
                   <Sparkles size={13} /> KI-Schätzung — prüfen & bei Bedarf korrigieren
                 </div>
                 <div className="text-[11px] sm-text-ink-60">
@@ -276,7 +269,10 @@ export default function ProfileModal({ profile, onSave, onCancel, wardrobe, sett
                   })}
                 </div>
                 {profileInferenceProposal.hinweise && (
-                  <div className="text-[11px] sm-text-ink-60 italic">💡 {profileInferenceProposal.hinweise}</div>
+                  <div className="text-[11px] sm-text-ink-60 italic flex items-start gap-1">
+                    <Lightbulb size={12} className="sm-text-tape mt-0.5 shrink-0" />
+                    <span>{profileInferenceProposal.hinweise}</span>
+                  </div>
                 )}
                 <div className="flex items-center gap-2 pt-1 flex-wrap">
                   <button onClick={applyProfileInference} className="sm-btn-primary flex items-center gap-1.5 text-xs" type="button">
@@ -365,7 +361,6 @@ export default function ProfileModal({ profile, onSave, onCancel, wardrobe, sett
           <button onClick={onCancel} className="sm-btn-ghost" type="button">Abbrechen</button>
           <button onClick={handleSave} className="sm-btn-primary" type="button">Speichern</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

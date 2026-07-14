@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, ImagePlus, Trash2, Star, Pencil, Loader2, Ruler, StickyNote, Link as LinkIcon } from 'lucide-react';
+import Modal from './Modal';
 import { downscaleImage, persistImages } from '../utils/image';
 import { linkLabel, normalizeUrl } from '../utils/helpers';
 
@@ -14,7 +15,7 @@ function FitBadge({ fit }) {
 // Detailansicht eines Kleidungsstücks: Bildergalerie (beliebig viele Fotos —
 // Vorderseite, Rückseite, Größentabelle, …), Bilder hinzufügen/löschen,
 // Titelbild wählen, Stammdaten + Größentabelle read-only.
-export default function GarmentDetail({ garment, settings, storageMode, onClose, onEdit, onDelete, onUpdate }) {
+export default function GarmentDetail({ garment, storageMode, onClose, onEdit, onDelete, onUpdate }) {
   const fileInputRef = useRef(null);
   const [index, setIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -73,16 +74,13 @@ export default function GarmentDetail({ garment, settings, storageMode, onClose,
   const hasChartValues = chart && chart.sizes?.some(s => s && s.trim());
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center p-4 z-50 animate-fade-in"
-      style={{ background: 'rgba(34,31,26,0.5)' }}
-      onClick={onClose}
+    <Modal
+      onClose={onClose}
+      label={`${garment.brand} — ${garment.name}`}
+      maxWidthClass="max-w-3xl"
+      className="overflow-y-auto"
+      style={{ maxHeight: '92vh' }}
     >
-      <div
-        className="sm-bg-paper max-w-3xl w-full overflow-y-auto rounded-sm shadow-xl sm-border-graph border animate-scale-up"
-        style={{ maxHeight: '92vh' }}
-        onClick={e => e.stopPropagation()}
-      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b sm-border-graph bg-black/[0.02]">
           <div className="min-w-0">
@@ -221,7 +219,7 @@ export default function GarmentDetail({ garment, settings, storageMode, onClose,
                   href={normalizeUrl(l)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-[#3B6EA5] hover:underline flex items-center gap-1"
+                  className="text-xs sm-link flex items-center gap-1"
                 >
                   <LinkIcon size={11} /> {linkLabel(normalizeUrl(l))}
                 </a>
@@ -281,7 +279,6 @@ export default function GarmentDetail({ garment, settings, storageMode, onClose,
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

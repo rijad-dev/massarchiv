@@ -1,3 +1,8 @@
+// Zentrale Ollama-Modell-Defaults — einzige Quelle für App-Einstellungen,
+// SettingsModal-Fallbacks und LLM-Client (vorher an vier Stellen inkonsistent).
+export const DEFAULT_OLLAMA_TEXT_MODEL = 'qwen2.5vl:7b';
+export const DEFAULT_OLLAMA_VISION_MODEL = 'qwen2.5vl:7b';
+
 export const CATEGORIES = {
   'Shorts': ['Bund', 'Hüfte', 'Schrittlänge'],
   'Hose / Jeans': ['Bund', 'Hüfte', 'Schrittlänge', 'Beininnenlänge'],

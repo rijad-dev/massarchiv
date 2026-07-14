@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, Trash2, Shirt, RefreshCw, ChevronDown, ChevronUp, Search, X, Link as LinkIcon, StickyNote } from 'lucide-react';
+import { Clock, Trash2, Shirt, RefreshCw, ChevronDown, ChevronUp, Search, X, Link as LinkIcon, StickyNote, Lightbulb } from 'lucide-react';
 import { matchesQuery, linkLabel, normalizeUrl } from '../utils/helpers';
 
 function ChartTable({ chart }) {
@@ -155,8 +155,9 @@ export default function HistoryTab({ history, onDelete, onClearAll, onTransfer, 
             </div>
 
             {h.result?.tipp && (
-              <div className="mt-3 ml-1 text-xs bg-[#C9971F]/5 p-2 border sm-border-graph rounded text-yellow-900 italic">
-                💡 {h.result.tipp}
+              <div className="mt-3 ml-1 text-xs bg-[#C9971F]/5 p-2 border sm-border-graph rounded sm-text-warn italic flex items-start gap-1.5">
+                <Lightbulb size={13} className="sm-text-tape mt-0.5 shrink-0" />
+                <span>{h.result.tipp}</span>
               </div>
             )}
 
@@ -175,7 +176,7 @@ export default function HistoryTab({ history, onDelete, onClearAll, onTransfer, 
                     href={normalizeUrl(l)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-[#3B6EA5] hover:underline flex items-center gap-1"
+                    className="text-xs sm-link flex items-center gap-1"
                   >
                     <LinkIcon size={11} /> {linkLabel(normalizeUrl(l))}
                   </a>

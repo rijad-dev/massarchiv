@@ -2,6 +2,9 @@
 // Routet je nach Speicher-Modus über den Express-Proxy (/api/analyze, /api/extract)
 // oder direkt aus dem Browser (localStorage-/Dateimodus).
 
+import { api } from './api';
+import { DEFAULT_OLLAMA_TEXT_MODEL, DEFAULT_OLLAMA_VISION_MODEL } from './helpers';
+
 export function parseRawJSON(text) {
   const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
   try {
@@ -43,8 +46,8 @@ async function fetchClientSideLLM(settings, systemPrompt, userPrompt, images) {
   const {
     provider,
     ollamaUrl = 'http://localhost:11434',
-    ollamaModel = 'llama3',
-    ollamaVisionModel = 'qwen2.5vl:7b',
+    ollamaModel = DEFAULT_OLLAMA_TEXT_MODEL,
+    ollamaVisionModel = DEFAULT_OLLAMA_VISION_MODEL,
     apiKey,
     apiModel,
     customBaseUrl
@@ -147,8 +150,7 @@ async function fetchClientSideLLM(settings, systemPrompt, userPrompt, images) {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'dangerouslyAllowBrowser': 'true'
+        'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
         model,
@@ -169,34 +171,21 @@ async function fetchClientSideLLM(settings, systemPrompt, userPrompt, images) {
 export async function callLLM({ settings, storageMode, systemPrompt, userPrompt, images = [], endpoint = 'analyze' }) {
   if (storageMode === 'sqlite') {
     const model = settings.provider === 'ollama'
-      ? (images.length > 0 ? (settings.ollamaVisionModel || 'qwen2.5vl:7b') : settings.ollamaModel)
+      ? (images.length > 0 ? (settings.ollamaVisionModel || DEFAULT_OLLAMA_VISION_MODEL) : settings.ollamaModel)
       : settings.apiModel;
 
-    const response = await fetch(`/api/${endpoint}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        provider: settings.provider,
-        model,
-        systemPrompt,
-        userPrompt,
-        images,
-        ollamaUrl: settings.ollamaUrl,
-        apiKey: settings.apiKey,
-        customBaseUrl: settings.customBaseUrl
-      })
+    const data = await api.post(`/api/${endpoint}`, {
+      provider: settings.provider,
+      model,
+      systemPrompt,
+      userPrompt,
+      images,
+      ollamaUrl: settings.ollamaUrl,
+      apiKey: settings.apiKey,
+      customBaseUrl: settings.customBaseUrl
     });
 
-    if (!response.ok) {
-      let message = 'Serverfehler bei der KI-Anfrage';
-      try {
-        const err = await response.json();
-        if (err.error) message = err.error;
-      } catch { /* Antwort war kein JSON */ }
-      throw new Error(message);
-    }
-
-    return parseRawJSON(extractProviderText(settings.provider, await response.json()));
+    return parseRawJSON(extractProviderText(settings.provider, data));
   }
 
   return fetchClientSideLLM(settings, systemPrompt, userPrompt, images);
@@ -206,16 +195,7 @@ export async function callLLM({ settings, storageMode, systemPrompt, userPrompt,
 export async function fetchOllamaModels(storageMode, ollamaUrl) {
   const url = ollamaUrl || 'http://localhost:11434';
   if (storageMode === 'sqlite') {
-    const response = await fetch(`/api/ollama-models?url=${encodeURIComponent(url)}`);
-    if (!response.ok) {
-      let message = 'Modelle konnten nicht geladen werden';
-      try {
-        const err = await response.json();
-        if (err.error) message = err.error;
-      } catch { /* Antwort war kein JSON */ }
-      throw new Error(message);
-    }
-    const { models } = await response.json();
+    const { models } = await api.get(`/api/ollama-models?url=${encodeURIComponent(url)}`);
     return models;
   }
   const response = await fetch(`${url}/api/tags`);

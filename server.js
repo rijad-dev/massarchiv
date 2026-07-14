@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -14,7 +13,8 @@ import {
   clearHistory,
   pruneHistory,
   getProfile,
-  saveProfile
+  saveProfile,
+  closeDb
 } from './db.js';
 import { handleLLMRequest } from './llm-proxy.js';
 
@@ -25,8 +25,8 @@ const PORT = process.env.PORT || 4215;
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-// Enable CORS and JSON parsing (Limit erhöht für Base64-Bilder)
-app.use(cors());
+// JSON parsing (Limit erhöht für Base64-Bilder). Kein CORS nötig: dist/ und
+// /api teilen denselben Origin, der Vite-Dev-Server proxyt /api (vite.config.js).
 app.use(express.json({ limit: '25mb' }));
 
 // ---------------------------------------------------------------------------
@@ -37,18 +37,25 @@ const MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp'
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 // Sammelt alle in Garderobe + Verlauf referenzierten Upload-Dateinamen und
-// löscht alles andere aus uploads/ — deckt Entity-Löschung, entfernte Bilder
+// räumt alles andere aus uploads/ weg — deckt Entity-Löschung, entfernte Bilder
 // beim Überschreiben und geteilte Referenzen (Verlauf ↔ Garderobe) sauber ab.
 //
 // Schutzfrist: Dateien, die jünger als CLEANUP_GRACE_MS sind, werden nie
-// gelöscht — auch wenn sie aktuell in keiner DB-Zeile referenziert sind.
+// angefasst — auch wenn sie aktuell in keiner DB-Zeile referenziert sind.
 // Grund: Ein Client kann ein Bild hochladen (Datei existiert bereits) und
 // speichert die referenzierende Zeile erst kurz danach in einem zweiten
 // Request. Ohne Schutzfrist reißt ein dazwischen laufender Cleanup (durch
 // einen beliebigen anderen gleichzeitigen Save/Delete) frisch hochgeladene,
 // noch nicht referenzierte Bilder weg — genau das hat bei einem Mehr-Teile-
 // Import echte Nutzerfotos gelöscht (siehe App.jsx handleImportBackup).
+//
+// Verwaiste Dateien werden NICHT gelöscht, sondern nach uploads-trash/
+// verschoben (mit Zeitstempel-Präfix). Grund: Läuft der Server versehentlich
+// gegen eine leere/fremde wardrobe.db (DB verschoben, Backup noch nicht
+// importiert), wären sonst alle echten Fotos unwiederbringlich weg. Der
+// Papierkorb liegt außerhalb der /uploads-Route und kann manuell geleert werden.
 const CLEANUP_GRACE_MS = 5 * 60 * 1000;
+const TRASH_DIR = path.join(__dirname, 'uploads-trash');
 
 async function cleanupOrphanedUploads() {
   try {
@@ -66,9 +73,12 @@ async function cleanupOrphanedUploads() {
     for (const file of fs.readdirSync(UPLOADS_DIR)) {
       if (referenced.has(file)) continue;
       try {
-        const { mtimeMs } = fs.statSync(path.join(UPLOADS_DIR, file));
-        if (now - mtimeMs < CLEANUP_GRACE_MS) continue; // zu frisch — überspringen
-        fs.unlinkSync(path.join(UPLOADS_DIR, file));
+        const filePath = path.join(UPLOADS_DIR, file);
+        const stat = fs.statSync(filePath);
+        if (!stat.isFile()) continue;
+        if (now - stat.mtimeMs < CLEANUP_GRACE_MS) continue; // zu frisch — überspringen
+        fs.mkdirSync(TRASH_DIR, { recursive: true });
+        fs.renameSync(filePath, path.join(TRASH_DIR, `${Date.now()}-${file}`));
       } catch { /* best effort */ }
     }
   } catch (error) {
@@ -219,6 +229,12 @@ app.post('/api/profile', async (req, res) => {
 app.post('/api/analyze', handleLLMRequest);
 app.post('/api/extract', handleLLMRequest);
 
+// Healthcheck — genutzt vom Launcher (start_massarchiv.bat), um zu warten,
+// bis der Server wirklich Anfragen beantwortet (nicht nur den Port belegt).
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true });
+});
+
 // Listet lokal installierte Ollama-Modelle (für das Modell-Dropdown in den Einstellungen)
 app.get('/api/ollama-models', async (req, res) => {
   try {
@@ -229,22 +245,52 @@ app.get('/api/ollama-models', async (req, res) => {
     }
     const data = await response.json();
     res.json({ models: (data.models || []).map(m => m.name) });
-  } catch (error) {
+  } catch {
     res.status(502).json({ error: 'Ollama-Server nicht erreichbar. Läuft Ollama?' });
   }
 });
 
+// Unbekannte /api-Routen als JSON-404 beantworten — sonst fiele ein Tippfehler
+// in einer Client-Route auf den SPA-Fallback und lieferte HTML statt JSON.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: `Unbekannte API-Route: ${req.method} ${req.originalUrl}` });
+});
+
 // Serve frontend build in production
+const DIST_INDEX = path.join(__dirname, 'dist', 'index.html');
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // Fallback to index.html for SPA routing
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  if (!fs.existsSync(DIST_INDEX)) {
+    return res.status(503).send(
+      '<h1>Maßarchiv</h1><p>Frontend-Build fehlt. Bitte einmal <code>npm run build</code> ' +
+      'im Projektordner ausführen und diese Seite neu laden.</p>'
+    );
+  }
+  res.sendFile(DIST_INDEX);
 });
 
-app.listen(PORT, () => {
+// Nur an Loopback binden: Die App verwaltet private Körperdaten und ist eine
+// reine Lokal-App — ohne Host-Argument würde Express auf 0.0.0.0 lauschen und
+// jedes Gerät im selben Netz könnte die API lesen und schreiben.
+const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`==================================================`);
   console.log(` Maßarchiv Server running on http://localhost:${PORT}`);
   console.log(` Storage Mode: SQLite Database`);
   console.log(`==================================================`);
+  if (!fs.existsSync(DIST_INDEX)) {
+    console.warn(' Hinweis: dist/index.html fehlt — bitte zuerst "npm run build" ausführen.');
+  }
 });
+
+// Sauber herunterfahren: offene Verbindungen beenden und die SQLite-DB
+// schließen, damit ein Stop nie mitten in einem Schreibvorgang abreißt.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    server.close(() => {
+      closeDb().catch(() => {}).finally(() => process.exit(0));
+    });
+    setTimeout(() => process.exit(0), 3000).unref();
+  });
+}

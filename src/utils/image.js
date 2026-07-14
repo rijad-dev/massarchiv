@@ -3,6 +3,7 @@
 // für die Vision-Extraktion.
 
 import { uid } from './helpers';
+import { api } from './api';
 
 // Verkleinert eine Bilddatei per Canvas und liefert ein In-Memory-Bildobjekt.
 // Im localStorage-Modus (5-MB-Quota) stärker komprimieren: maxDim 800, quality 0.7.
@@ -78,23 +79,10 @@ export async function persistImages(images, storageMode) {
     if (!dataUrl) continue;
 
     if (storageMode === 'sqlite') {
-      const response = await fetch('/api/images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          data: img.base64 || dataUrl.split(',')[1],
-          mimeType: img.mimeType || 'image/jpeg'
-        })
+      const { url } = await api.post('/api/images', {
+        data: img.base64 || dataUrl.split(',')[1],
+        mimeType: img.mimeType || 'image/jpeg'
       });
-      if (!response.ok) {
-        let message = 'Bild-Upload fehlgeschlagen';
-        try {
-          const err = await response.json();
-          if (err.error) message = err.error;
-        } catch { /* keine JSON-Antwort */ }
-        throw new Error(message);
-      }
-      const { url } = await response.json();
       out.push({ id: img.id, url, kind: img.kind || 'sonstiges' });
     } else {
       out.push({ id: img.id, url: dataUrl, kind: img.kind || 'sonstiges' });

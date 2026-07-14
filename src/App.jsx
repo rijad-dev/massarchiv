@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Ruler, Settings, Loader2, Shirt, Sparkles, Clock, User } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Ruler, Settings, Loader2, Shirt, Sparkles, Clock, User, AlertTriangle } from 'lucide-react';
 import WardrobeTab from './components/WardrobeTab';
 import AnalyzeTab from './components/AnalyzeTab';
 import HistoryTab from './components/HistoryTab';
@@ -7,14 +7,16 @@ import GarmentForm from './components/GarmentForm';
 import GarmentDetail from './components/GarmentDetail';
 import SettingsModal from './components/SettingsModal';
 import ProfileModal, { EMPTY_PROFILE } from './components/ProfileModal';
-import { uid, emptyChart, downloadJSON } from './utils/helpers';
+import Toast from './components/Toast';
+import { uid, emptyChart, downloadJSON, DEFAULT_OLLAMA_TEXT_MODEL, DEFAULT_OLLAMA_VISION_MODEL } from './utils/helpers';
 import { persistImages } from './utils/image';
+import { api } from './utils/api';
 
 const DEFAULT_SETTINGS = {
   provider: 'ollama',
   ollamaUrl: 'http://localhost:11434',
-  ollamaModel: 'qwen2.5vl:7b',
-  ollamaVisionModel: 'qwen2.5vl:7b',
+  ollamaModel: DEFAULT_OLLAMA_TEXT_MODEL,
+  ollamaVisionModel: DEFAULT_OLLAMA_VISION_MODEL,
   apiKey: '',
   apiModel: '',
   customBaseUrl: ''
@@ -37,6 +39,18 @@ export default function App() {
   const [backupBusy, setBackupBusy] = useState(false);
   const [storageMode, setStorageMode] = useState('local'); // 'sqlite' or 'local'
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+
+  // Sichtbare Statusmeldung (unten rechts) statt stillem console.error —
+  // fehlgeschlagene Speichervorgänge dürfen nie wie Erfolge aussehen.
+  const showToast = (message, type = 'error') => {
+    clearTimeout(toastTimerRef.current);
+    setToast({ message, type });
+    toastTimerRef.current = setTimeout(() => setToast(null), 6000);
+  };
+
+  useEffect(() => () => clearTimeout(toastTimerRef.current), []);
 
   // Auto-detect server and load initial data
   useEffect(() => {
@@ -53,28 +67,20 @@ export default function App() {
 
       // 2. Detect storage backend (Express SQLite vs localStorage)
       try {
-        const response = await fetch('/api/wardrobe');
-        if (response.ok) {
-          const wData = await response.json();
-          setWardrobe(wData);
+        const wData = await api.get('/api/wardrobe');
+        setWardrobe(wData);
 
-          const hResponse = await fetch('/api/history');
-          if (hResponse.ok) {
-            const hData = await hResponse.json();
-            setHistory(hData);
-          }
+        try {
+          setHistory(await api.get('/api/history'));
+        } catch { /* Verlauf ist optional — Garderobe reicht für den SQLite-Modus */ }
 
-          const pResponse = await fetch('/api/profile');
-          if (pResponse.ok) {
-            const pData = await pResponse.json();
-            if (pData && Object.keys(pData).length) setProfile({ ...EMPTY_PROFILE, ...pData });
-          }
+        try {
+          const pData = await api.get('/api/profile');
+          if (pData && Object.keys(pData).length) setProfile({ ...EMPTY_PROFILE, ...pData });
+        } catch { /* Steckbrief ist optional */ }
 
-          setStorageMode('sqlite');
-          console.log('Maßarchiv: SQLite-Speicher geladen.');
-        } else {
-          throw new Error('Server returned error status');
-        }
+        setStorageMode('sqlite');
+        console.log('Maßarchiv: SQLite-Speicher geladen.');
       } catch (e) {
         console.log('Kein lokaler Server erreichbar. Nutze Browser-Speicher (localStorage).', e);
         setStorageMode('local');
@@ -105,24 +111,8 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [analyzeDirty]);
 
-  // Persistiert einen Verlaufseintrag (INSERT OR REPLACE) im aktiven Speicher
-  const persistHistoryEntry = async (entry, nextHistory) => {
-    if (storageMode === 'sqlite') {
-      try {
-        await fetch('/api/history', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(entry)
-        });
-      } catch (e) {
-        console.error('Fehler beim Speichern der Analyse auf dem Server:', e);
-      }
-    } else {
-      localStorage.setItem('analyses', JSON.stringify(nextHistory));
-    }
-  };
-
   const handleSaveGarment = async (garment) => {
+    const prevWardrobe = wardrobe;
     const exists = wardrobe.some(g => g.id === garment.id);
     const nextWardrobe = exists
       ? wardrobe.map(g => (g.id === garment.id ? garment : g))
@@ -134,13 +124,14 @@ export default function App() {
 
     if (storageMode === 'sqlite') {
       try {
-        await fetch('/api/wardrobe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(garment)
-        });
+        await api.post('/api/wardrobe', garment);
       } catch (e) {
-        console.error('Fehler beim Speichern auf dem Server:', e);
+        // Rollback + Formular mit den Eingaben wieder öffnen — nichts geht verloren
+        setWardrobe(prevWardrobe);
+        setEditing(garment);
+        setShowForm(true);
+        showToast(`Speichern fehlgeschlagen: ${e.message}`);
+        return;
       }
     } else {
       localStorage.setItem('wardrobe', JSON.stringify(nextWardrobe));
@@ -156,17 +147,17 @@ export default function App() {
   };
 
   const handleDeleteGarment = async (id) => {
+    const prevWardrobe = wardrobe;
     const nextWardrobe = wardrobe.filter(g => g.id !== id);
     setWardrobe(nextWardrobe);
     if (detailId === id) setDetailId(null);
 
     if (storageMode === 'sqlite') {
       try {
-        await fetch(`/api/wardrobe/${id}`, {
-          method: 'DELETE'
-        });
+        await api.delete(`/api/wardrobe/${id}`);
       } catch (e) {
-        console.error('Fehler beim Löschen auf dem Server:', e);
+        setWardrobe(prevWardrobe);
+        showToast(`Löschen fehlgeschlagen: ${e.message}`);
       }
     } else {
       localStorage.setItem('wardrobe', JSON.stringify(nextWardrobe));
@@ -174,20 +165,33 @@ export default function App() {
   };
 
   const handleAnalyzed = async (entry) => {
+    const prevHistory = history;
     const nextHistory = [entry, ...history].slice(0, 50);
     setHistory(nextHistory);
-    await persistHistoryEntry(entry, nextHistory);
+
+    if (storageMode === 'sqlite') {
+      try {
+        await api.post('/api/history', entry);
+      } catch (e) {
+        setHistory(prevHistory);
+        showToast(`Analyse konnte nicht im Verlauf gespeichert werden: ${e.message}`);
+      }
+    } else {
+      localStorage.setItem('analyses', JSON.stringify(nextHistory));
+    }
   };
 
   const handleDeleteHistory = async (id) => {
+    const prevHistory = history;
     const nextHistory = history.filter(h => h.id !== id);
     setHistory(nextHistory);
 
     if (storageMode === 'sqlite') {
       try {
-        await fetch(`/api/history/${id}`, { method: 'DELETE' });
+        await api.delete(`/api/history/${id}`);
       } catch (e) {
-        console.error('Fehler beim Löschen des Verlaufseintrags:', e);
+        setHistory(prevHistory);
+        showToast(`Löschen des Verlaufseintrags fehlgeschlagen: ${e.message}`);
       }
     } else {
       localStorage.setItem('analyses', JSON.stringify(nextHistory));
@@ -195,13 +199,15 @@ export default function App() {
   };
 
   const handleClearHistory = async () => {
+    const prevHistory = history;
     setHistory([]);
 
     if (storageMode === 'sqlite') {
       try {
-        await fetch('/api/history', { method: 'DELETE' });
+        await api.delete('/api/history');
       } catch (e) {
-        console.error('Fehler beim Leeren des Verlaufs:', e);
+        setHistory(prevHistory);
+        showToast(`Verlauf leeren fehlgeschlagen: ${e.message}`);
       }
     } else {
       localStorage.setItem('analyses', JSON.stringify([]));
@@ -257,13 +263,10 @@ export default function App() {
     setShowProfile(false);
     if (storageMode === 'sqlite') {
       try {
-        await fetch('/api/profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newProfile)
-        });
+        await api.post('/api/profile', newProfile);
       } catch (e) {
-        console.error('Fehler beim Speichern des Steckbriefs:', e);
+        // Eingaben im Speicher behalten, aber klar machen, dass sie nicht persistiert sind
+        showToast(`Steckbrief konnte nicht gespeichert werden (${e.message}) — Änderungen gehen beim Neuladen verloren.`);
       }
     } else {
       localStorage.setItem('profile', JSON.stringify(newProfile));
@@ -313,9 +316,10 @@ export default function App() {
         settings: { ...settings, apiKey: '' }
       };
       downloadJSON(payload, `massarchiv-backup-${new Date().toISOString().slice(0, 10)}.json`);
+      showToast('Backup exportiert.', 'success');
     } catch (e) {
       console.error(e);
-      alert(`Export fehlgeschlagen: ${e.message || 'Unbekannter Fehler'}`);
+      showToast(`Export fehlgeschlagen: ${e.message || 'Unbekannter Fehler'}`);
     } finally {
       setBackupBusy(false);
     }
@@ -351,30 +355,30 @@ export default function App() {
           const produkt = images.find(i => i.kind === 'produkt') || images[0] || null;
           const entity = { ...g, images, thumbnail: produkt ? produkt.url : null };
           wardrobeToImport.push(entity);
-          await fetch('/api/wardrobe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entity) });
+          await api.post('/api/wardrobe', entity);
         }
         for (const h of parsed.history) {
           const images = await persistImages(h.images || [], storageMode);
           const produkt = images.find(i => i.kind === 'produkt') || images[0] || null;
           const entity = { ...h, images, thumbnail: produkt ? produkt.url : null };
           historyToImport.push(entity);
-          await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entity) });
+          await api.post('/api/history', entity);
         }
         if (parsed.profile) {
-          await fetch('/api/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsed.profile) });
+          await api.post('/api/profile', parsed.profile);
         }
         // Erst jetzt, wo alle importierten Bilder referenziert sind, altes
         // Material löschen, das nicht im Backup enthalten war.
         const importedWardrobeIds = new Set(wardrobeToImport.map(g => g.id));
         for (const g of wardrobe) {
           if (!importedWardrobeIds.has(g.id)) {
-            try { await fetch(`/api/wardrobe/${g.id}`, { method: 'DELETE' }); } catch (e) { console.error(e); }
+            try { await api.delete(`/api/wardrobe/${g.id}`); } catch (e) { console.error(e); }
           }
         }
         const importedHistoryIds = new Set(historyToImport.map(h => h.id));
         for (const h of history) {
           if (!importedHistoryIds.has(h.id)) {
-            try { await fetch(`/api/history/${h.id}`, { method: 'DELETE' }); } catch (e) { console.error(e); }
+            try { await api.delete(`/api/history/${h.id}`); } catch (e) { console.error(e); }
           }
         }
       } else {
@@ -401,15 +405,16 @@ export default function App() {
         setSettings(importedSettings);
         localStorage.setItem('settings', JSON.stringify(importedSettings));
       }
-      alert(
+      showToast(
         'Backup erfolgreich importiert.' +
         (parsed.settings && parsed.settings.provider !== 'ollama'
           ? ' Der API-Key wurde aus Sicherheitsgründen nicht mit exportiert — bitte in den Einstellungen erneut eingeben.'
-          : '')
+          : ''),
+        'success'
       );
     } catch (e) {
       console.error(e);
-      alert(`Import fehlgeschlagen: ${e.message || 'Unbekannter Fehler'}`);
+      showToast(`Import fehlgeschlagen: ${e.message || 'Unbekannter Fehler'}`);
     } finally {
       setBackupBusy(false);
     }
@@ -437,26 +442,28 @@ export default function App() {
 
   return (
     <div className="sm-root p-4 sm:p-8">
-      
+
       {/* Container */}
       <div className="max-w-5xl mx-auto">
 
         {isFileProtocol && (
           <div className="mb-6 p-4 bg-[#A8412F]/10 border border-[#A8412F]/30 rounded-sm text-sm text-[#A8412F] flex flex-col gap-2 shadow-sm">
-            <span className="font-bold uppercase tracking-wider text-xs">⚠️ Sicherheits-Einschränkung (Dateimodus)</span>
+            <span className="font-bold uppercase tracking-wider text-xs flex items-center gap-1.5">
+              <AlertTriangle size={14} /> Sicherheits-Einschränkung (Dateimodus)
+            </span>
             <p className="leading-relaxed">
-              Du hast die HTML-Datei direkt als lokale Datei geöffnet (<code>file://</code>). 
+              Du hast die HTML-Datei direkt als lokale Datei geöffnet (<code>file://</code>).
               Aufgrund von Browser-Sicherheitsrichtlinien (CORS) blockiert der Browser hier meistens die Verbindung zu Ollama und das Speichern von Daten.
             </p>
             <p className="font-semibold">
-              👉 Bitte öffne stattdessen die Web-Adresse in deinem Vivaldi Browser: 
+              Starte stattdessen den lokalen Server (<code>npm start</code>) und öffne die App unter
               <a href="http://localhost:4215" target="_blank" rel="noopener noreferrer" className="underline ml-1 font-bold text-black hover:text-[#C9971F]">
                 http://localhost:4215
               </a>
             </p>
           </div>
         )}
-        
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b sm-border-graph pb-6 mb-6">
           <div className="space-y-1">
@@ -484,7 +491,7 @@ export default function App() {
               title="Einstellungen öffnen"
               type="button"
             >
-              <Settings size={14} className="sm-text-ink-60" /> <span className="hidden sm:inline">Settings</span>
+              <Settings size={14} className="sm-text-ink-60" /> <span className="hidden sm:inline">Einstellungen</span>
             </button>
           </div>
         </div>
@@ -524,7 +531,7 @@ export default function App() {
             onOpenDetail={(g) => setDetailId(g.id)}
           />
         )}
-        
+
         {tab === 'analyze' && (
           <AnalyzeTab
             wardrobe={wardrobe}
@@ -568,7 +575,6 @@ export default function App() {
         return (
           <GarmentDetail
             garment={detailGarment}
-            settings={settings}
             storageMode={storageMode}
             onClose={() => setDetailId(null)}
             onEdit={(g) => { setDetailId(null); setEditing(g); setShowForm(true); }}
@@ -602,6 +608,8 @@ export default function App() {
           onCancel={() => setShowProfile(false)}
         />
       )}
+
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

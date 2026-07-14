@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Ruler, Loader2 } from 'lucide-react';
+import Modal from './Modal';
 import SizeChartEditor from './SizeChartEditor';
 import ImageImport from './ImageImport';
 import NotesLinksEditor from './NotesLinksEditor';
@@ -107,16 +108,13 @@ export default function GarmentForm({ initial, onSave, onCancel, settings, stora
   };
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center p-4 z-50 animate-fade-in"
-      style={{ background: 'rgba(34,31,26,0.4)' }}
-      onClick={handleCancel}
+    <Modal
+      onClose={handleCancel}
+      label={initial ? 'Kleidungsstück bearbeiten' : 'Neues Kleidungsstück'}
+      maxWidthClass="max-w-2xl"
+      className="overflow-y-auto"
+      style={{ maxHeight: '90vh' }}
     >
-      <div
-        className="sm-bg-paper max-w-2xl w-full overflow-y-auto rounded-sm shadow-xl sm-border-graph border animate-scale-up"
-        style={{ maxHeight: '90vh' }}
-        onClick={e => e.stopPropagation()}
-      >
         <div className="flex items-center justify-between px-5 py-4 border-b sm-border-graph bg-black/[0.02]">
           <h3 className="sm-font-label uppercase tracking-wide text-sm sm-text-ink flex items-center gap-2 font-semibold">
             <Ruler size={16} className="sm-text-tape" />
@@ -230,7 +228,6 @@ export default function GarmentForm({ initial, onSave, onCancel, settings, stora
             {saving ? 'Speichert…' : 'Speichern'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

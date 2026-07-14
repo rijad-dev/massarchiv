@@ -34,7 +34,7 @@ export default function WardrobeTab({ wardrobe, onAdd, onEdit, onDelete, onOpenD
       <div className="flex flex-col items-center justify-center text-center py-20 gap-4 border border-dashed sm-border-graph rounded bg-[#FBF9F3]/60 max-w-4xl mx-auto shadow-inner">
         <div className="relative">
           <Shirt size={48} className="sm-text-ink-40" />
-          <div className="absolute -top-1 -right-1 bg-yellow-500 w-3 h-3 rounded-full animate-ping" />
+          <div className="absolute -top-1 -right-1 bg-[#C9971F] w-3 h-3 rounded-full animate-ping" />
         </div>
         <div>
           <div className="sm-font-label uppercase tracking-wide text-sm sm-text-ink font-semibold">Noch keine Kleidungsstücke</div>
@@ -74,7 +74,7 @@ export default function WardrobeTab({ wardrobe, onAdd, onEdit, onDelete, onOpenD
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div className="text-sm sm-text-ink-60 font-medium">
-          {wardrobe.length} Kleidungsstück{wardrobe.length === 1 ? '' : 'er'} in deiner Garderobe
+          {wardrobe.length} Kleidungsstück{wardrobe.length === 1 ? '' : 'e'} in deiner Garderobe
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <select

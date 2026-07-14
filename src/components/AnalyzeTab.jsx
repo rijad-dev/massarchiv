@@ -49,23 +49,23 @@ export default function AnalyzeTab({ wardrobe, settings, storageMode, profile, p
   const [lastEntry, setLastEntry] = useState(null);
   const [appliedPrefillId, setAppliedPrefillId] = useState(null);
 
-  // „Erneut prüfen" aus dem Verlauf: Felder vorbefüllen (einmalig je prefillId)
-  useEffect(() => {
-    if (prefill && prefill.prefillId !== appliedPrefillId) {
-      setBrand(prefill.brand || '');
-      setName(prefill.name || '');
-      setCategory(prefill.category || 'Sonstiges');
-      setMaterial(prefill.material || '');
-      setProductNote(prefill.productNote || '');
-      setLinks(prefill.links || []);
-      setChart(prefill.chart || emptyChart(prefill.category || 'Sonstiges'));
-      setImages(prefill.images || []);
-      setResult(null);
-      setLastEntry(null);
-      setError('');
-      setAppliedPrefillId(prefill.prefillId);
-    }
-  }, [prefill, appliedPrefillId]);
+  // „Erneut prüfen" aus dem Verlauf: Felder vorbefüllen (einmalig je prefillId).
+  // Bewusst direkt im Render statt in einem Effect — das von React empfohlene
+  // Muster, um eigenen State an geänderte Props anzupassen (kein Doppel-Render-Commit).
+  if (prefill && prefill.prefillId !== appliedPrefillId) {
+    setAppliedPrefillId(prefill.prefillId);
+    setBrand(prefill.brand || '');
+    setName(prefill.name || '');
+    setCategory(prefill.category || 'Sonstiges');
+    setMaterial(prefill.material || '');
+    setProductNote(prefill.productNote || '');
+    setLinks(prefill.links || []);
+    setChart(prefill.chart || emptyChart(prefill.category || 'Sonstiges'));
+    setImages(prefill.images || []);
+    setResult(null);
+    setLastEntry(null);
+    setError('');
+  }
 
   // Meldet unfertige Eingaben nach oben, damit App.jsx vor Tab-Wechsel/Reload warnen kann.
   // Nach einer erfolgreichen Analyse ist der Stand bereits im Verlauf gesichert — nicht mehr "dirty".
@@ -176,9 +176,9 @@ export default function AnalyzeTab({ wardrobe, settings, storageMode, profile, p
       {/* Input section */}
       <div className="lg:col-span-7 space-y-4">
         {wardrobe.length === 0 && (
-          <div className="sm-card p-4 flex items-start gap-2.5 text-sm bg-yellow-500/10 border-yellow-500/30">
-            <AlertCircle size={18} className="text-yellow-600 mt-0.5 shrink-0" />
-            <span className="text-yellow-900 leading-relaxed font-medium">
+          <div className="sm-card p-4 flex items-start gap-2.5 text-sm sm-warn-box">
+            <AlertCircle size={18} className="sm-text-warn mt-0.5 shrink-0" />
+            <span className="sm-text-warn leading-relaxed font-medium">
               Füge zuerst ein paar Kleidungsstücke in deiner Garderobe hinzu. Ohne Vergleichsbasis kann die KI keine Empfehlung aussprechen.
             </span>
           </div>
@@ -226,7 +226,7 @@ export default function AnalyzeTab({ wardrobe, settings, storageMode, profile, p
 
         <div className="text-xs sm-text-ink-60 bg-black/[0.02] border border-dashed sm-border-graph p-2.5 rounded font-medium">
           {relevantCount > 0
-            ? `${relevantCount} passende Referenz${relevantCount === 1 ? 'e' : 'n'} in deiner Garderobe (Kategorie „${category}“).`
+            ? `${relevantCount} passende Referenz${relevantCount === 1 ? '' : 'en'} in deiner Garderobe (Kategorie „${category}“).`
             : `Keine Referenz in der Kategorie „${category}“ — die KI vergleicht dann mit dem, was sonst am ehesten passt.`}
         </div>
 
@@ -288,7 +288,7 @@ export default function AnalyzeTab({ wardrobe, settings, storageMode, profile, p
                         {matched ? (
                           <button
                             onClick={() => onOpenReference(matched)}
-                            className="font-medium text-[#3B6EA5] hover:underline text-left"
+                            className="font-medium sm-link text-left"
                             title="Kleidungsstück in der Garderobe öffnen"
                             type="button"
                           >
@@ -312,14 +312,14 @@ export default function AnalyzeTab({ wardrobe, settings, storageMode, profile, p
             {result.materialHinweis && (
               <div>
                 <div className="sm-font-label uppercase tracking-wide text-xs sm-text-ink-60 font-semibold mb-1">Material-Hinweis</div>
-                <p className="text-xs sm-text-ink-60 bg-yellow-500/5 p-2 rounded border sm-border-graph leading-relaxed">{result.materialHinweis}</p>
+                <p className="text-xs sm-text-ink-60 bg-[#C9971F]/5 p-2 rounded border sm-border-graph leading-relaxed">{result.materialHinweis}</p>
               </div>
             )}
 
             {result.tipp && (
               <div className="sm-bg-tape-10 border sm-border-graph rounded-sm p-3.5 text-xs flex items-start gap-2.5">
                 <Sparkles size={16} className="sm-text-tape mt-0.5 shrink-0" />
-                <span className="font-semibold text-yellow-900 leading-normal">{result.tipp}</span>
+                <span className="font-semibold sm-text-warn leading-normal">{result.tipp}</span>
               </div>
             )}
 

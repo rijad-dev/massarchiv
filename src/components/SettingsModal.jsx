@@ -1,12 +1,14 @@
 import React, { useState, useRef } from 'react';
 import { X, Settings, Server, Database, Sparkles, HelpCircle, Download, Upload, Loader2, RefreshCw } from 'lucide-react';
+import Modal from './Modal';
 import { fetchOllamaModels } from '../utils/llm';
+import { DEFAULT_OLLAMA_TEXT_MODEL, DEFAULT_OLLAMA_VISION_MODEL } from '../utils/helpers';
 
 export default function SettingsModal({ settings, onSave, onCancel, storageMode, onExportBackup, onImportBackup, backupBusy }) {
   const [provider, setProvider] = useState(settings.provider || 'ollama');
   const [ollamaUrl, setOllamaUrl] = useState(settings.ollamaUrl || 'http://localhost:11434');
-  const [ollamaModel, setOllamaModel] = useState(settings.ollamaModel || 'llama3');
-  const [ollamaVisionModel, setOllamaVisionModel] = useState(settings.ollamaVisionModel || 'qwen2.5vl:7b');
+  const [ollamaModel, setOllamaModel] = useState(settings.ollamaModel || DEFAULT_OLLAMA_TEXT_MODEL);
+  const [ollamaVisionModel, setOllamaVisionModel] = useState(settings.ollamaVisionModel || DEFAULT_OLLAMA_VISION_MODEL);
   const [apiKey, setApiKey] = useState(settings.apiKey || '');
   const [apiModel, setApiModel] = useState(settings.apiModel || '');
   const [customBaseUrl, setCustomBaseUrl] = useState(settings.customBaseUrl || '');
@@ -46,15 +48,7 @@ export default function SettingsModal({ settings, onSave, onCancel, storageMode,
   };
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center p-4 z-50"
-      style={{ background: 'rgba(34,31,26,0.4)' }}
-      onClick={onCancel}
-    >
-      <div
-        className="sm-bg-paper max-w-lg w-full rounded-sm shadow-xl sm-border-graph border overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
+    <Modal onClose={onCancel} label="Einstellungen" maxWidthClass="max-w-lg" className="overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b sm-border-graph">
           <h3 className="sm-font-label uppercase tracking-wide text-sm sm-text-ink flex items-center gap-2">
@@ -166,7 +160,7 @@ export default function SettingsModal({ settings, onSave, onCancel, storageMode,
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs sm-text-ink-60">Model Name</label>
+                <label className="block text-xs sm-text-ink-60">Text-Modell (Analyse)</label>
                 <input
                   type="text"
                   value={ollamaModel}
@@ -218,16 +212,16 @@ export default function SettingsModal({ settings, onSave, onCancel, storageMode,
           {provider !== 'ollama' && (
             <div className="space-y-3 p-3 border sm-border-graph rounded-sm sm-bg-card">
               <div className="flex items-center gap-1.5 text-xs sm-font-label uppercase tracking-wide sm-text-tape">
-                <Sparkles size={14} /> Cloud API Konfiguration
+                <Sparkles size={14} /> Cloud-API-Konfiguration
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs sm-text-ink-60">API Key</label>
+                <label className="block text-xs sm-text-ink-60">API-Key</label>
                 <input
                   type="password"
                   value={apiKey}
                   onChange={e => setApiKey(e.target.value)}
-                  placeholder="Deine API Key eingeben"
+                  placeholder="API-Key eingeben (bleibt lokal)"
                   className="sm-input font-mono text-xs"
                 />
               </div>
@@ -247,7 +241,7 @@ export default function SettingsModal({ settings, onSave, onCancel, storageMode,
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs sm-text-ink-60">Custom Base URL (optional)</label>
+                <label className="block text-xs sm-text-ink-60">Eigene Base-URL (optional)</label>
                 <input
                   type="text"
                   value={customBaseUrl}
@@ -261,10 +255,10 @@ export default function SettingsModal({ settings, onSave, onCancel, storageMode,
 
           {/* CORS Info for Static Mode */}
           {storageMode === 'local' && provider === 'ollama' && (
-            <div className="text-xs sm-text-ink-60 bg-amber-500/10 border border-amber-500/30 rounded p-2.5 flex gap-2">
-              <HelpCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-xs sm-text-ink-60 sm-warn-box border rounded p-2.5 flex gap-2">
+              <HelpCircle size={16} className="sm-text-warn shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold text-amber-900">CORS-Einschränkung bei statischer HTML:</span>
+                <span className="font-semibold sm-text-warn">CORS-Einschränkung bei statischer HTML:</span>
                 <p className="mt-0.5 leading-normal">
                   Da die Seite als Datei geöffnet wird, blockieren Browser direkte Anfragen an <code>localhost:11434</code>. Starte Ollama mit <code>OLLAMA_ORIGINS="*"</code> (z.B. in CMD: <code>set OLLAMA_ORIGINS=*</code> und dann <code>ollama start</code>) oder nutze den empfohlenen Node-Server.
                 </p>
@@ -278,7 +272,6 @@ export default function SettingsModal({ settings, onSave, onCancel, storageMode,
           <button onClick={onCancel} className="sm-btn-ghost" type="button">Abbrechen</button>
           <button onClick={handleSave} className="sm-btn-primary" type="button">Speichern</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

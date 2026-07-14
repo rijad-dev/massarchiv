@@ -1,11 +1,12 @@
-# Secrets — NIEMALS committen
+# Secrets — NIEMALS committen (API-Keys werden in der App-UI eingegeben,
+# eine .env wird vom Code nicht gelesen)
 .env
 .env.*
-!.env.example
 
-# Private Nutzerdaten (Koerperdaten-Profil, Uploads)
-wardrobe.db
+# Private Nutzerdaten (Koerperdaten-Profil, Uploads) — inkl. SQLite-WAL/SHM
+wardrobe.db*
 uploads/
+uploads-trash/
 
 # Dependencies & Builds
 node_modules/

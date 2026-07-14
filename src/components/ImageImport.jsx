@@ -1,11 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { ImagePlus, Sparkles, Loader2, X, AlertCircle, Check, Trash2, TriangleAlert, Clock } from 'lucide-react';
+import { ImagePlus, Sparkles, Loader2, X, AlertCircle, Check, Trash2, TriangleAlert, Clock, Lightbulb } from 'lucide-react';
 import SizeChartEditor from './SizeChartEditor';
-import { CATEGORIES } from '../utils/helpers';
+import { CATEGORIES, DEFAULT_OLLAMA_VISION_MODEL } from '../utils/helpers';
 import { prepareImage, imageToBase64 } from '../utils/image';
 import { callLLM } from '../utils/llm';
-
-const DEFAULT_VISION_MODEL = 'qwen2.5vl:7b';
 
 // --- Stufe 1: Bild-Klassifikation + Produkt-Metadaten (ohne Tabelle) ---------
 // Bewusst von der Tabellen-Extraktion getrennt: Vision-Modelle liefern deutlich
@@ -201,7 +199,7 @@ export default function ImageImport({ images, onChange, settings, storageMode, c
     return () => clearInterval(id);
   }, [busy]);
   const visionModel = settings.provider === 'ollama'
-    ? (settings.ollamaVisionModel || DEFAULT_VISION_MODEL)
+    ? (settings.ollamaVisionModel || DEFAULT_OLLAMA_VISION_MODEL)
     : (settings.apiModel || settings.provider);
 
   const addFiles = async (fileList) => {
@@ -313,7 +311,7 @@ export default function ImageImport({ images, onChange, settings, storageMode, c
       console.error(e);
       let message = e.message || 'Unbekannter Fehler';
       if (/does not support images|image input|multimodal|vision/i.test(message)) {
-        message = `Das Modell „${visionModel}“ kann keine Bilder verarbeiten. Wähle in den Einstellungen ein Vision-Modell (z. B. ${DEFAULT_VISION_MODEL}).`;
+        message = `Das Modell „${visionModel}“ kann keine Bilder verarbeiten. Wähle in den Einstellungen ein Vision-Modell (z. B. ${DEFAULT_OLLAMA_VISION_MODEL}).`;
       } else if (message.includes('JSON')) {
         message = 'Die KI hat kein sauberes Ergebnis geliefert — bitte erneut versuchen.';
       }
@@ -391,7 +389,7 @@ export default function ImageImport({ images, onChange, settings, storageMode, c
       </div>
 
       {isLocalMode && images.length >= 2 && (
-        <div className="text-[11px] text-amber-800 bg-amber-500/10 border border-amber-500/30 rounded p-2">
+        <div className="text-[11px] sm-warn-box border rounded p-2">
           Browser-Speicher-Modus: Bilder werden komprimiert im localStorage abgelegt (~5 MB Limit).
           Für viele Fotos den lokalen Server starten (SQLite-Modus).
         </div>
@@ -430,7 +428,7 @@ export default function ImageImport({ images, onChange, settings, storageMode, c
           : [];
         return (
           <div className="border border-[#C9971F]/50 bg-[#C9971F]/5 rounded-sm p-3 space-y-3 animate-scale-up">
-            <div className="sm-font-label uppercase tracking-wide text-xs font-semibold text-yellow-900 flex items-center gap-1.5">
+            <div className="sm-font-label uppercase tracking-wide text-xs font-semibold sm-text-warn flex items-center gap-1.5">
               <Sparkles size={13} /> KI-Vorschlag — prüfen & bei Bedarf korrigieren
             </div>
 
@@ -459,8 +457,8 @@ export default function ImageImport({ images, onChange, settings, storageMode, c
 
             {/* Halbe-Umfänge-Warnung */}
             {halfFlags.map(mi => (
-              <div key={mi} className="flex items-start gap-2 text-[11px] text-amber-900 bg-amber-500/10 border border-amber-500/40 rounded p-2">
-                <TriangleAlert size={14} className="mt-0.5 shrink-0 text-amber-600" />
+              <div key={mi} className="flex items-start gap-2 text-[11px] sm-warn-box border rounded p-2">
+                <TriangleAlert size={14} className="mt-0.5 shrink-0 sm-text-warn" />
                 <div className="flex-1">
                   <span className="font-semibold">»{proposal.chart.measurements[mi]}«</span> sieht flach gemessen aus
                   (halber Umfang). Viele Tabellen geben z. B. 56 statt 112 an.
@@ -494,7 +492,10 @@ export default function ImageImport({ images, onChange, settings, storageMode, c
             )}
 
             {proposal.hinweise && (
-              <div className="text-[11px] sm-text-ink-60 italic">💡 {proposal.hinweise}</div>
+              <div className="text-[11px] sm-text-ink-60 italic flex items-start gap-1">
+                <Lightbulb size={12} className="sm-text-tape mt-0.5 shrink-0" />
+                <span>{proposal.hinweise}</span>
+              </div>
             )}
 
             <div className="flex items-center gap-2 pt-1 flex-wrap">

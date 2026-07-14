@@ -4,30 +4,48 @@
   "description": "Persönliches Passform-Archiv mit lokaler LLM-Unterstützung (Ollama) und SQLite.",
   "main": "server.js",
   "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server.js",
-    "start": "node server.js"
+    "prestart": "node scripts/ensure-build.js",
+    "start": "node server.js",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
-    "cors": "^2.8.5",
+    "@fontsource/archivo-narrow": "^5.2.8",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "express": "^4.19.2",
+    "lucide-react": "^0.395.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
     "undici": "^8.7.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.19",
-    "lucide-react": "^0.395.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
     "postcss": "^8.4.38",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "prettier": "^3.9.5",
     "tailwindcss": "^3.4.3",
-    "vite": "^5.2.11"
+    "vite": "^5.2.11",
+    "vitest": "^4.1.10"
   }
 }
