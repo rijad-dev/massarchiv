@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseRawJSON, extractProviderText } from '../src/utils/llm.js';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { parseRawJSON, extractProviderText, callLLM } from '../src/utils/llm.js';
 
 describe('parseRawJSON', () => {
   it('parst sauberes JSON', () => {
@@ -52,4 +52,33 @@ describe('extractProviderText', () => {
     expect(extractProviderText('sonstwas', { a: 1 })).toBe('{"a":1}');
     expect(extractProviderText('sonstwas', 'roh')).toBe('roh');
   });
+});
+
+describe('Cloud-Timeout', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  // Antwortformen der drei Cloud-Provider, jeweils mit gültigem JSON-Payload
+  const shaped = {
+    gemini: { candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] },
+    openai: { choices: [{ message: { content: '{"ok":true}' } }] },
+    anthropic: { content: [{ type: 'text', text: '{"ok":true}' }] }
+  };
+
+  for (const provider of ['gemini', 'openai', 'anthropic']) {
+    it(`bricht hängende ${provider}-Requests per AbortSignal ab`, async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => shaped[provider] });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await callLLM({
+        settings: { provider, apiKey: 'test-key' },
+        storageMode: 'local',
+        systemPrompt: 's',
+        userPrompt: 'u'
+      });
+
+      expect(result).toEqual({ ok: true });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    });
+  }
 });

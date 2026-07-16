@@ -5,6 +5,12 @@
 import { api } from './api';
 import { DEFAULT_OLLAMA_TEXT_MODEL, DEFAULT_OLLAMA_VISION_MODEL } from './helpers';
 
+// Cloud-APIs antworten in Sekunden bis wenigen Minuten — hängende Verbindungen
+// nach 120 s hart abbrechen. Lokales Ollama braucht mehr Luft (große
+// Vision-Modelle laden minutenlang), analog zum 600-s-Agent im Server-Proxy.
+const CLOUD_TIMEOUT_MS = 120_000;
+const OLLAMA_TIMEOUT_MS = 600_000;
+
 export function parseRawJSON(text) {
   const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
   try {
@@ -77,7 +83,8 @@ async function fetchClientSideLLM(settings, systemPrompt, userPrompt, images) {
     const doRequest = () => fetch(`${ollamaUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS)
     });
     let response = await doRequest();
     if (!response.ok) {
@@ -102,7 +109,8 @@ async function fetchClientSideLLM(settings, systemPrompt, userPrompt, images) {
       body: JSON.stringify({
         contents: [{ parts }],
         generationConfig: { responseMimeType: 'application/json' }
-      })
+      }),
+      signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS)
     });
     if (!response.ok) throw new Error(`Gemini Server returned status ${response.status}`);
     return parseRawJSON(extractProviderText('gemini', await response.json()));
@@ -130,7 +138,8 @@ async function fetchClientSideLLM(settings, systemPrompt, userPrompt, images) {
           { role: 'user', content: userContent }
         ],
         response_format: { type: 'json_object' }
-      })
+      }),
+      signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS)
     });
     if (!response.ok) throw new Error(`OpenAI Server returned status ${response.status}`);
     return parseRawJSON(extractProviderText('openai', await response.json()));
@@ -157,7 +166,8 @@ async function fetchClientSideLLM(settings, systemPrompt, userPrompt, images) {
         max_tokens: 2048,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }]
-      })
+      }),
+      signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS)
     });
     if (!response.ok) throw new Error(`Anthropic Server returned status ${response.status}`);
     return parseRawJSON(extractProviderText('anthropic', await response.json()));

@@ -35,7 +35,7 @@ Jede Marke misst anders: Bei der einen bin ich M, bei der nächsten L, und die G
 Voraussetzungen: [Node.js](https://nodejs.org) ≥ 18 (getestet mit Node 20).
 
 ```bash
-git clone https://github.com/sweezy-zit/massarchiv.git
+git clone https://github.com/rijad-dev/massarchiv.git
 cd massarchiv
 npm install
 npm start

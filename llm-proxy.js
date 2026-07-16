@@ -8,6 +8,10 @@ import { fetch as undiciFetch, Agent } from 'undici';
 // der undici-Default (300 s Header-Timeout) reißt sonst mitten in der Auswertung ab.
 const ollamaAgent = new Agent({ headersTimeout: 600_000, bodyTimeout: 600_000 });
 
+// Cloud-APIs antworten in Sekunden bis wenigen Minuten — hängende Verbindungen
+// nach 120 s hart abbrechen (per Umgebungsvariable LLM_CLOUD_TIMEOUT_MS übersteuerbar).
+const CLOUD_TIMEOUT_MS = Number(process.env.LLM_CLOUD_TIMEOUT_MS) || 120_000;
+
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGES = 8;
 // Base64 wächst um Faktor ~1,37 — 14 MB Base64 entsprechen ~10 MB Bilddaten.
@@ -90,7 +94,8 @@ async function callProvider({ provider, model, systemPrompt, userPrompt, images,
       body: JSON.stringify({
         contents: [{ parts }],
         generationConfig: { responseMimeType: 'application/json' }
-      })
+      }),
+      signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS)
     });
 
     if (!response.ok) {
@@ -123,7 +128,8 @@ async function callProvider({ provider, model, systemPrompt, userPrompt, images,
           { role: 'user', content: userContent }
         ],
         response_format: { type: 'json_object' }
-      })
+      }),
+      signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS)
     });
 
     if (!response.ok) {
@@ -155,7 +161,8 @@ async function callProvider({ provider, model, systemPrompt, userPrompt, images,
         max_tokens: 2048,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }]
-      })
+      }),
+      signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS)
     });
 
     if (!response.ok) {
