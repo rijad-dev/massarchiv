@@ -109,4 +109,15 @@ describe('chartToPlain', () => {
     };
     expect(Object.keys(chartToPlain(chart))).toEqual(['M']);
   });
+
+  it('behält Bereichsangaben (von–bis) als String, reine Zahlen als Zahl', () => {
+    const chart = {
+      measurements: ['Brust', 'Länge'],
+      sizes: ['M'],
+      values: [['96-101', ' 70 ']],
+    };
+    expect(chartToPlain(chart)).toEqual({
+      M: { Brust: '96-101', 'Länge': 70 },
+    });
+  });
 });

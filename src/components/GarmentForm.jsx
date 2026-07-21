@@ -37,9 +37,10 @@ export default function GarmentForm({ initial, onSave, onCancel, settings, stora
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
+  // Kategoriewechsel setzt NUR die Kategorie — die Größentabelle bleibt erhalten
+  // (Zurücksetzen geht bewusst manuell über den Button im SizeChartEditor).
   const handleCategoryChange = (newCat) => {
     setCategory(newCat);
-    if (!initial) setChart(emptyChart(newCat));
   };
 
   // KI-Vorschlag aus dem Bild-Import übernehmen (nur nach expliziter Bestätigung)
@@ -214,7 +215,7 @@ export default function GarmentForm({ initial, onSave, onCancel, settings, stora
 
           <div className="pt-2">
             <div className="sm-font-label uppercase tracking-wide text-xs sm-text-ink-60 mb-2 font-semibold">Größentabelle (in cm)</div>
-            <SizeChartEditor chart={chart} onChange={setChart} />
+            <SizeChartEditor chart={chart} onChange={setChart} category={category} />
           </div>
         </div>
 

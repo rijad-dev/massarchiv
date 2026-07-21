@@ -77,9 +77,10 @@ export default function AnalyzeTab({ wardrobe, settings, storageMode, profile, p
     onDirtyChange?.(isDirty);
   }, [brand, name, material, productNote, links, images, result, onDirtyChange]);
 
+  // Kategoriewechsel setzt NUR die Kategorie — die Größentabelle bleibt erhalten
+  // (Zurücksetzen geht bewusst manuell über den Button im SizeChartEditor).
   const handleCategoryChange = (c) => {
     setCategory(c);
-    setChart(emptyChart(c));
   };
 
   // KI-Vorschlag aus dem Bild-Import übernehmen (nach expliziter Bestätigung)
@@ -234,7 +235,7 @@ export default function AnalyzeTab({ wardrobe, settings, storageMode, profile, p
           <div className="sm-font-label uppercase tracking-wide text-xs sm-text-ink-60 mb-2 font-semibold flex items-center gap-1">
             <Ruler size={12} className="sm-text-tape" /> Größentabelle des neuen Produkts (cm)
           </div>
-          <SizeChartEditor chart={chart} onChange={setChart} />
+          <SizeChartEditor chart={chart} onChange={setChart} category={category} />
         </div>
 
         <div className="flex items-center gap-3 pt-2 flex-wrap">

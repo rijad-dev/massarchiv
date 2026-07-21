@@ -87,10 +87,14 @@ export function chartToPlain(chart) {
     if (!s || !s.trim()) return;
     const measures = {};
     chart.measurements.forEach((m, mi) => {
-      const v = chart.values[si] ? chart.values[si][mi] : '';
-      if (v !== '' && v !== undefined && v !== null) {
-        measures[m] = Number(v);
-      }
+      const raw = chart.values[si] ? chart.values[si][mi] : '';
+      const v = typeof raw === 'string' ? raw.trim() : raw;
+      if (v === '' || v === undefined || v === null) return;
+      // Reine Zahl → als Zahl. Bereichsangaben wie "96-101" (oder sonstiger
+      // Nicht-Zahl-Text) bleiben als String erhalten, damit die KI die Spanne
+      // sieht statt eines NaN.
+      const num = Number(v);
+      measures[m] = Number.isNaN(num) ? v : num;
     });
     rows[s] = measures;
   });
