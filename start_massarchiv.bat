@@ -23,7 +23,9 @@ timeout /t 1 /nobreak >nul
 goto waitloop
 
 :openwindow
-:: Rahmenloses App-Fenster ohne Adressleiste; InPrivate = taucht nicht im
-:: Browser-/Suchverlauf auf; localhost muss nie manuell eingegeben werden.
-start "" msedge --app="http://localhost:%PORT%" --inprivate --no-first-run
+:: Rahmenloses App-Fenster ohne Adressleiste. Eigenes, dauerhaftes Edge-Profil
+:: (nicht das Standardprofil) statt --inprivate -- so bleiben die Einstellungen
+:: (localStorage: Anbieter, API-Key, Modell) ueber Neustarts erhalten und die App
+:: bleibt trotzdem vom normalen Browser und dessen Verlauf getrennt.
+start "" msedge --app="http://localhost:%PORT%" --user-data-dir="%LOCALAPPDATA%\Massarchiv\EdgeProfile" --no-first-run --no-default-browser-check
 exit
