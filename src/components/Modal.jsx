@@ -6,6 +6,15 @@ import React, { useEffect, useRef } from 'react';
 export default function Modal({ onClose, label, maxWidthClass = 'max-w-lg', className = '', style, children }) {
   const panelRef = useRef(null);
 
+  // onClose kommt bei jedem Parent-Render als neue Funktion herein (z. B.
+  // handleCancel in GarmentForm). Hinge der Fokus-Effekt unten davon ab, liefe
+  // er bei JEDEM Tastendruck erneut und risse mit panel.focus() den Fokus aus
+  // dem gerade beschriebenen Eingabefeld — man könnte nur einen Buchstaben
+  // tippen. Deshalb: das aktuelle onClose in einer Ref halten; der Fokus-Effekt
+  // läuft nur einmal (Mount/Unmount).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+
   useEffect(() => {
     const panel = panelRef.current;
     const previouslyFocused = document.activeElement;
@@ -17,7 +26,7 @@ export default function Modal({ onClose, label, maxWidthClass = 'max-w-lg', clas
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !panel) return;
@@ -41,7 +50,7 @@ export default function Modal({ onClose, label, maxWidthClass = 'max-w-lg', clas
       document.removeEventListener('keydown', onKeyDown);
       previouslyFocused?.focus?.();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div
