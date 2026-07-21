@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Ruler, Settings, Loader2, Shirt, Sparkles, Clock, User, AlertTriangle } from 'lucide-react';
+import { Ruler, Settings, Loader2, Shirt, Sparkles, Clock, User, AlertTriangle, Trash2 } from 'lucide-react';
 import WardrobeTab from './components/WardrobeTab';
 import AnalyzeTab from './components/AnalyzeTab';
 import HistoryTab from './components/HistoryTab';
+import TrashTab from './components/TrashTab';
 import GarmentForm from './components/GarmentForm';
 import GarmentDetail from './components/GarmentDetail';
 import SettingsModal from './components/SettingsModal';
 import ProfileModal, { EMPTY_PROFILE } from './components/ProfileModal';
 import Toast from './components/Toast';
-import { uid, emptyChart, downloadJSON, DEFAULT_OLLAMA_TEXT_MODEL, DEFAULT_OLLAMA_VISION_MODEL } from './utils/helpers';
+import { uid, emptyChart, downloadJSON, isTrashExpired, DEFAULT_OLLAMA_TEXT_MODEL, DEFAULT_OLLAMA_VISION_MODEL } from './utils/helpers';
 import { persistImages } from './utils/image';
 import { api } from './utils/api';
 
@@ -25,6 +26,7 @@ const DEFAULT_SETTINGS = {
 export default function App() {
   const [tab, setTab] = useState('wardrobe');
   const [wardrobe, setWardrobe] = useState([]);
+  const [trash, setTrash] = useState([]);
   const [history, setHistory] = useState([]);
   const [initializing, setInitializing] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -42,11 +44,19 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
 
+  // Spiegeln Garderobe und Papierkorb in Refs, damit der „Rückgängig"-Button im
+  // Toast (der eine ältere Render-Closure festhält) beim Klick immer den
+  // AKTUELLEN Stand liest — sonst liefe ein Rückgängig ins Leere.
+  const wardrobeRef = useRef(wardrobe);
+  const trashRef = useRef(trash);
+  useEffect(() => { wardrobeRef.current = wardrobe; trashRef.current = trash; }, [wardrobe, trash]);
+
   // Sichtbare Statusmeldung (unten rechts) statt stillem console.error —
   // fehlgeschlagene Speichervorgänge dürfen nie wie Erfolge aussehen.
-  const showToast = (message, type = 'error') => {
+  // Optionale `action = { label, onAction }` zeigt einen Button (z. B. Rückgängig).
+  const showToast = (message, type = 'error', action = null) => {
     clearTimeout(toastTimerRef.current);
-    setToast({ message, type });
+    setToast({ message, type, action });
     toastTimerRef.current = setTimeout(() => setToast(null), 6000);
   };
 
@@ -71,6 +81,10 @@ export default function App() {
         setWardrobe(wData);
 
         try {
+          setTrash(await api.get('/api/trash'));
+        } catch { /* Papierkorb ist optional */ }
+
+        try {
           setHistory(await api.get('/api/history'));
         } catch { /* Verlauf ist optional — Garderobe reicht für den SQLite-Modus */ }
 
@@ -89,6 +103,17 @@ export default function App() {
         try {
           const storedW = localStorage.getItem('wardrobe');
           if (storedW) setWardrobe(JSON.parse(storedW));
+
+          // Papierkorb laden und dabei abgelaufene Einträge (>30 Tage) verwerfen.
+          const storedT = localStorage.getItem('wardrobe_trash');
+          if (storedT) {
+            const parsedTrash = JSON.parse(storedT);
+            const keptTrash = parsedTrash.filter(item => !isTrashExpired(item.deletedAt));
+            setTrash(keptTrash);
+            if (keptTrash.length !== parsedTrash.length) {
+              localStorage.setItem('wardrobe_trash', JSON.stringify(keptTrash));
+            }
+          }
 
           const storedH = localStorage.getItem('analyses');
           if (storedH) setHistory(JSON.parse(storedH));
@@ -146,21 +171,106 @@ export default function App() {
     }
   };
 
+  // Löschen aus der Garderobe = ab in den Papierkorb (30 Tage wiederherstellbar),
+  // statt sofort endgültig weg. Refs statt Closure-State, damit das „Rückgängig"
+  // im Toast auch nach weiteren Renders korrekt greift.
   const handleDeleteGarment = async (id) => {
-    const prevWardrobe = wardrobe;
-    const nextWardrobe = wardrobe.filter(g => g.id !== id);
+    const garment = wardrobeRef.current.find(g => g.id === id);
+    if (!garment) return;
+
+    const prevWardrobe = wardrobeRef.current;
+    const prevTrash = trashRef.current;
+    const trashItem = { ...garment, deletedAt: new Date().toISOString() };
+    const nextWardrobe = prevWardrobe.filter(g => g.id !== id);
+    const nextTrash = [trashItem, ...prevTrash];
+
     setWardrobe(nextWardrobe);
+    setTrash(nextTrash);
     if (detailId === id) setDetailId(null);
 
     if (storageMode === 'sqlite') {
       try {
-        await api.delete(`/api/wardrobe/${id}`);
+        await api.post(`/api/wardrobe/${id}/trash`);
       } catch (e) {
         setWardrobe(prevWardrobe);
+        setTrash(prevTrash);
         showToast(`Löschen fehlgeschlagen: ${e.message}`);
+        return;
       }
     } else {
       localStorage.setItem('wardrobe', JSON.stringify(nextWardrobe));
+      localStorage.setItem('wardrobe_trash', JSON.stringify(nextTrash));
+    }
+
+    showToast('In den Papierkorb verschoben.', 'success', {
+      label: 'Rückgängig',
+      onAction: () => handleRestoreGarment(id),
+    });
+  };
+
+  // Holt ein Teil aus dem Papierkorb zurück in die Garderobe.
+  const handleRestoreGarment = async (id) => {
+    const item = trashRef.current.find(t => t.id === id);
+    if (!item) return;
+    // deletedAt ist nur ein Papierkorb-Attribut — beim Zurücklegen entfernen.
+    const garment = { ...item };
+    delete garment.deletedAt;
+
+    const prevWardrobe = wardrobeRef.current;
+    const prevTrash = trashRef.current;
+    const nextTrash = prevTrash.filter(t => t.id !== id);
+    const nextWardrobe = prevWardrobe.some(g => g.id === id) ? prevWardrobe : [...prevWardrobe, garment];
+
+    setTrash(nextTrash);
+    setWardrobe(nextWardrobe);
+
+    if (storageMode === 'sqlite') {
+      try {
+        await api.post(`/api/trash/${id}/restore`);
+      } catch (e) {
+        setWardrobe(prevWardrobe);
+        setTrash(prevTrash);
+        showToast(`Wiederherstellen fehlgeschlagen: ${e.message}`);
+        return;
+      }
+    } else {
+      localStorage.setItem('wardrobe', JSON.stringify(nextWardrobe));
+      localStorage.setItem('wardrobe_trash', JSON.stringify(nextTrash));
+    }
+  };
+
+  // Entfernt ein Teil endgültig aus dem Papierkorb (nicht mehr wiederherstellbar).
+  const handlePurgeGarment = async (id) => {
+    const prevTrash = trashRef.current;
+    const nextTrash = prevTrash.filter(t => t.id !== id);
+    setTrash(nextTrash);
+
+    if (storageMode === 'sqlite') {
+      try {
+        await api.delete(`/api/trash/${id}`);
+      } catch (e) {
+        setTrash(prevTrash);
+        showToast(`Endgültiges Löschen fehlgeschlagen: ${e.message}`);
+      }
+    } else {
+      localStorage.setItem('wardrobe_trash', JSON.stringify(nextTrash));
+    }
+  };
+
+  // Leert den kompletten Papierkorb (endgültig).
+  const handleEmptyTrash = async () => {
+    const prevTrash = trashRef.current;
+    setTrash([]);
+
+    if (storageMode === 'sqlite') {
+      try {
+        await api.delete('/api/trash');
+      } catch (e) {
+        setTrash(prevTrash);
+        showToast(`Papierkorb leeren fehlgeschlagen: ${e.message}`);
+      }
+    } else {
+      localStorage.setItem('wardrobe_trash', JSON.stringify([]));
     }
   };
 
@@ -519,6 +629,13 @@ export default function App() {
           >
             <Clock size={14} /> Verlauf ({history.length})
           </button>
+          <button
+            onClick={() => switchTab('trash')}
+            className={`sm-tab flex items-center gap-1.5 whitespace-nowrap ${tab === 'trash' ? 'sm-tab-active' : ''}`}
+            type="button"
+          >
+            <Trash2 size={14} /> Papierkorb ({trash.length})
+          </button>
         </div>
 
         {/* Content Tabs */}
@@ -553,6 +670,15 @@ export default function App() {
             onClearAll={handleClearHistory}
             onTransfer={handleTransferToWardrobe}
             onRecheck={handleRecheck}
+          />
+        )}
+
+        {tab === 'trash' && (
+          <TrashTab
+            trash={trash}
+            onRestore={handleRestoreGarment}
+            onPurge={handlePurgeGarment}
+            onEmptyTrash={handleEmptyTrash}
           />
         )}
       </div>

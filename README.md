@@ -23,6 +23,7 @@ Jede Marke misst anders: Bei der einen bin ich M, bei der nächsten L, und die G
 ## Features
 
 - **Garderobe** — Kleidungsstücke mit Fotos, Größentabellen (cm), Material, Links und Passform-Notizen; Suche, Kategorie-Filter, Sortierung
+- **Papierkorb** — aus der Garderobe gelöschte Teile bleiben 30 Tage wiederherstellbar (Löschen zeigt sofort ein „Rückgängig") und werden danach automatisch endgültig entfernt
 - **KI-Größenanalyse** — vergleicht ein neues Produkt mit deiner Garderobe und deinem Steckbrief und empfiehlt eine Größe mit Begründung, Referenzstücken und Konfidenz
 - **Foto-Import mit Vision-KI** — Produktfoto + abfotografierte Größentabelle hochladen; die KI erkennt Marke, Kategorie und liest die Tabelle zellgenau aus (zweistufige Extraktion, jede Zelle vor Übernahme editierbar, Halber-Umfang-Erkennung)
 - **Steckbrief** — Körpermaße manuell pflegen oder von der KI aus den Passform-Rückmeldungen deiner Garderobe schätzen lassen
@@ -88,7 +89,7 @@ Browser (React 18 + Vite + Tailwind)
    │  /api/*
    ▼
 Express-Server (server.js, nur 127.0.0.1:4215)
-   ├── SQLite (db.js → wardrobe.db): Garderobe, Verlauf, Steckbrief
+   ├── SQLite (db.js → wardrobe.db): Garderobe, Verlauf, Steckbrief, Papierkorb
    ├── uploads/: Fotos (verwaiste Dateien wandern in den Papierkorb uploads-trash/)
    └── LLM-Proxy (llm-proxy.js): Ollama / OpenAI / Anthropic / Gemini
 ```

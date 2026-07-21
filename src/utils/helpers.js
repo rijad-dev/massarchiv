@@ -96,3 +96,28 @@ export function chartToPlain(chart) {
   });
   return rows;
 }
+
+// --- Papierkorb ------------------------------------------------------------
+// Aus der Garderobe gelöschte Teile landen im Papierkorb und werden nach dieser
+// Frist automatisch endgültig entfernt (Server-Prune beim Start/Öffnen,
+// Client-Prune beim Laden im localStorage-Modus).
+export const TRASH_RETENTION_DAYS = 30;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Verbleibende Tage bis zur endgültigen Löschung (nie negativ). `now` ist für
+// Tests injizierbar. Fehlt/ungültig das Datum, wird die volle Frist angezeigt.
+export function daysLeftInTrash(deletedAt, now = Date.now()) {
+  const deleted = Date.parse(deletedAt);
+  if (Number.isNaN(deleted)) return TRASH_RETENTION_DAYS;
+  const remainingMs = deleted + TRASH_RETENTION_DAYS * DAY_MS - now;
+  return Math.max(0, Math.ceil(remainingMs / DAY_MS));
+}
+
+// True, sobald die Aufbewahrungsfrist überschritten ist. Ein ungültiges Datum
+// gilt bewusst NICHT als abgelaufen — lieber behalten als versehentlich löschen.
+export function isTrashExpired(deletedAt, now = Date.now()) {
+  const deleted = Date.parse(deletedAt);
+  if (Number.isNaN(deleted)) return false;
+  return now - deleted >= TRASH_RETENTION_DAYS * DAY_MS;
+}

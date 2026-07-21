@@ -34,6 +34,11 @@ export async function getDb() {
       id TEXT PRIMARY KEY,
       data TEXT
     );
+    CREATE TABLE IF NOT EXISTS trash (
+      id TEXT PRIMARY KEY,
+      deletedAt TEXT,
+      data TEXT
+    );
   `);
 
   return db;
@@ -112,6 +117,79 @@ export async function pruneHistory(limit = 50) {
     'DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY date DESC LIMIT ?)',
     limit
   );
+  return { deleted: result.changes || 0 };
+}
+
+// ---------------------------------------------------------------------------
+// Papierkorb: Aus der Garderobe gelöschte Teile wandern hierher (statt sofort
+// weg zu sein) und werden nach 30 Tagen automatisch endgültig entfernt.
+// ---------------------------------------------------------------------------
+
+export async function getTrash() {
+  const database = await getDb();
+  const rows = await database.all('SELECT deletedAt, data FROM trash ORDER BY deletedAt DESC');
+  return rows.map(r => ({ ...JSON.parse(r.data), deletedAt: r.deletedAt }));
+}
+
+// Verschiebt ein Kleidungsstück atomar aus der Garderobe in den Papierkorb: der
+// Datensatz bleibt unverändert, zusätzlich wird der Löschzeitpunkt festgehalten.
+// Rückgabe: der Papierkorb-Eintrag — oder null, falls das Teil nicht (mehr) existiert.
+export async function moveGarmentToTrash(id) {
+  const database = await getDb();
+  const row = await database.get('SELECT data FROM wardrobe WHERE id = ?', id);
+  if (!row) return null;
+  const deletedAt = new Date().toISOString();
+  await database.exec('BEGIN');
+  try {
+    await database.run(
+      'INSERT OR REPLACE INTO trash (id, deletedAt, data) VALUES (?, ?, ?)',
+      id, deletedAt, row.data
+    );
+    await database.run('DELETE FROM wardrobe WHERE id = ?', id);
+    await database.exec('COMMIT');
+  } catch (error) {
+    await database.exec('ROLLBACK');
+    throw error;
+  }
+  return { ...JSON.parse(row.data), deletedAt };
+}
+
+// Holt ein Teil atomar aus dem Papierkorb zurück in die Garderobe.
+// Rückgabe: das wiederhergestellte Kleidungsstück — oder null, falls nicht im Papierkorb.
+export async function restoreFromTrash(id) {
+  const database = await getDb();
+  const row = await database.get('SELECT data FROM trash WHERE id = ?', id);
+  if (!row) return null;
+  await database.exec('BEGIN');
+  try {
+    await database.run('INSERT OR REPLACE INTO wardrobe (id, data) VALUES (?, ?)', id, row.data);
+    await database.run('DELETE FROM trash WHERE id = ?', id);
+    await database.exec('COMMIT');
+  } catch (error) {
+    await database.exec('ROLLBACK');
+    throw error;
+  }
+  return JSON.parse(row.data);
+}
+
+export async function deleteTrashItem(id) {
+  const database = await getDb();
+  await database.run('DELETE FROM trash WHERE id = ?', id);
+  return { id };
+}
+
+export async function clearTrash() {
+  const database = await getDb();
+  await database.run('DELETE FROM trash');
+  return { cleared: true };
+}
+
+// Entfernt Papierkorb-Einträge, deren Löschung länger als `maxAgeDays` zurückliegt.
+// Zeitvergleich über ISO-Strings (bei einheitlichem UTC-Z-Format = chronologisch).
+export async function pruneTrash(maxAgeDays = 30) {
+  const database = await getDb();
+  const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
+  const result = await database.run('DELETE FROM trash WHERE deletedAt < ?', cutoff);
   return { deleted: result.changes || 0 };
 }
 

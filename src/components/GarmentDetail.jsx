@@ -265,8 +265,10 @@ export default function GarmentDetail({ garment, storageMode, onClose, onEdit, o
 
         {/* Footer */}
         <div className="flex justify-between gap-2 px-5 py-4 border-t sm-border-graph sm-bg-card bg-black/[0.02] flex-wrap">
+          {/* Verschiebt in den Papierkorb (30 Tage wiederherstellbar) — daher
+              keine Rückfrage; das Rückgängig kommt als Toast-Aktion. */}
           <button
-            onClick={() => { if (window.confirm('Dieses Kleidungsstück wirklich löschen?')) { onDelete(garment.id); onClose(); } }}
+            onClick={() => { onDelete(garment.id); onClose(); }}
             className="sm-icon-btn-danger flex items-center gap-1.5 text-xs px-3 py-1.5 border border-[#A8412F]/30 rounded hover:bg-[#A8412F]/10 transition-all"
             type="button"
           >

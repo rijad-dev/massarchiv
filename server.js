@@ -14,6 +14,12 @@ import {
   pruneHistory,
   getProfile,
   saveProfile,
+  getTrash,
+  moveGarmentToTrash,
+  restoreFromTrash,
+  deleteTrashItem,
+  clearTrash,
+  pruneTrash,
   closeDb
 } from './db.js';
 import { handleLLMRequest } from './llm-proxy.js';
@@ -36,9 +42,11 @@ app.use(express.json({ limit: '25mb' }));
 const MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
-// Sammelt alle in Garderobe + Verlauf referenzierten Upload-Dateinamen und
-// räumt alles andere aus uploads/ weg — deckt Entity-Löschung, entfernte Bilder
-// beim Überschreiben und geteilte Referenzen (Verlauf ↔ Garderobe) sauber ab.
+// Sammelt alle in Garderobe, Verlauf UND Papierkorb referenzierten Upload-
+// Dateinamen und räumt alles andere aus uploads/ weg — deckt Entity-Löschung,
+// entfernte Bilder beim Überschreiben und geteilte Referenzen sauber ab.
+// Der Papierkorb zählt bewusst mit: so bleiben die Fotos gelöschter Teile bis
+// zur endgültigen Entfernung erhalten und sind nach dem Wiederherstellen wieder da.
 //
 // Schutzfrist: Dateien, die jünger als CLEANUP_GRACE_MS sind, werden nie
 // angefasst — auch wenn sie aktuell in keiner DB-Zeile referenziert sind.
@@ -59,9 +67,9 @@ const TRASH_DIR = path.join(__dirname, 'uploads-trash');
 
 async function cleanupOrphanedUploads() {
   try {
-    const [wardrobe, history] = await Promise.all([getWardrobe(), getHistory()]);
+    const [wardrobe, history, trash] = await Promise.all([getWardrobe(), getHistory(), getTrash()]);
     const referenced = new Set();
-    for (const entity of [...wardrobe, ...history]) {
+    for (const entity of [...wardrobe, ...history, ...trash]) {
       const urls = [...(entity.images || []).map(i => i && i.url), entity.thumbnail];
       for (const url of urls) {
         if (typeof url === 'string' && url.startsWith('/uploads/')) {
@@ -152,6 +160,66 @@ app.post('/api/wardrobe', async (req, res) => {
 app.delete('/api/wardrobe/:id', async (req, res) => {
   try {
     const result = await deleteGarment(req.params.id);
+    await cleanupOrphanedUploads();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Löschen aus der Garderobe = ab in den Papierkorb (umkehrbar). Der echte
+// Hard-Delete oben (DELETE /api/wardrobe/:id) bleibt für den Backup-Import
+// erhalten, damit dort ersetzte Teile NICHT im Papierkorb landen.
+app.post('/api/wardrobe/:id/trash', async (req, res) => {
+  try {
+    const result = await moveGarmentToTrash(req.params.id);
+    if (!result) return res.status(404).json({ error: 'Kleidungsstück nicht gefunden' });
+    await cleanupOrphanedUploads();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Papierkorb (30-Tage-Aufbewahrung, danach automatische Löschung)
+// ---------------------------------------------------------------------------
+
+app.get('/api/trash', async (req, res) => {
+  try {
+    // Lazy-Prune: bei jedem Öffnen abgelaufene Einträge (>30 Tage) entfernen.
+    await pruneTrash(30);
+    await cleanupOrphanedUploads();
+    res.json(await getTrash());
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/trash/:id/restore', async (req, res) => {
+  try {
+    const result = await restoreFromTrash(req.params.id);
+    if (!result) return res.status(404).json({ error: 'Eintrag nicht im Papierkorb' });
+    await cleanupOrphanedUploads();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/trash/:id', async (req, res) => {
+  try {
+    const result = await deleteTrashItem(req.params.id);
+    await cleanupOrphanedUploads();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/trash', async (req, res) => {
+  try {
+    const result = await clearTrash();
     await cleanupOrphanedUploads();
     res.json(result);
   } catch (error) {
@@ -282,6 +350,12 @@ const server = app.listen(PORT, '127.0.0.1', () => {
   if (!fs.existsSync(DIST_INDEX)) {
     console.warn(' Hinweis: dist/index.html fehlt — bitte zuerst "npm run build" ausführen.');
   }
+  // Beim Start abgelaufene Papierkorb-Einträge (>30 Tage) entfernen und die
+  // dadurch verwaisten Uploads aufräumen.
+  pruneTrash(30)
+    .then(({ deleted }) => { if (deleted) console.log(` Papierkorb: ${deleted} abgelaufene(n) Eintrag/Einträge entfernt.`); })
+    .then(() => cleanupOrphanedUploads())
+    .catch(err => console.error('Papierkorb-Prune beim Start fehlgeschlagen:', err.message));
 });
 
 // Sauber herunterfahren: offene Verbindungen beenden und die SQLite-DB
